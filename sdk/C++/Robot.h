@@ -11,9 +11,14 @@ using namespace std;
 
 class Robot
 {
+private:
+    static int i;
+
+
 public:
     int id;
-    int x, y, good_nums;
+    int x, y, goods;
+    int status;
     int move;
     bool is_avoid;
     RobotTaskType taskT;
@@ -23,17 +28,15 @@ public:
     vector<Point> path; // path to go, front is next point
     int get_deadline; // get goods deadline
     int money;
-    int type;
 
     double priority;
     Robot() {
-        type = 0;
         taskT = FREE;
         is_avoid = false;
+        id = i++;
         after_pull_at_berth_id = -1;
         money = 0;
         priority = id;
-        move = -1;
     }
 
     bool arriveGetDst() {
@@ -42,8 +45,8 @@ public:
 
     bool arrivePullDst(char grid[][N]);
 
-    void update(char grid[][N], int gds[][N][2], int connectField[][N], 
-                                int berth_dir_map[][N][N], int berth_dis_map[][N][N],
+    void update(char grid[][N], int gds[][N][2], bool gds_locked[][N], int connectField[][N], 
+                                int berth_dir_map[berth_num][N][N], int berth_dis_map[berth_num][N][N],
                                 vector<Robot>& robot, vector<Berth>& berth, vector<Boat>& boat, int frame);
     
     void setBSxy(int bx, int by, int sx, int sy);
@@ -52,8 +55,6 @@ public:
 
     // check robot around with distance d weather exist other robot
     bool checkAroundHaveRobot(char grid[][N], vector<Robot>& robot, int d);
-
-    int gatherAroundRobotNum(vector<Robot>& robot, int d);
 
     Point getNextPoint();
 };  

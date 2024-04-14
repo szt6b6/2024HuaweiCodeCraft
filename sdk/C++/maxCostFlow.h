@@ -10,6 +10,6 @@
 typedef std::pair<int,int> node;
 typedef std::priority_queue<node,std::vector<node>,std::greater<node>> heap;
 
-std::unordered_map<int, int> getTaskAssignment(int robot_n, int task_n, double profit[max_robot_num][flow_num]);
+std::unordered_map<int, int> getTaskAssignment(int robot_n, int task_n, float profit[robot_num][flow_num]);
 
 #endif

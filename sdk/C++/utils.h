@@ -12,64 +12,47 @@ using namespace std;
 
 extern vector<Berth> berth;
 
-#define limited_frame_start 15000
+#define limited_frame_start 0
 #define limited_frame_end 15000
 #define DEBUG 0
 
+#define see_position 0 // open err log or not
+#define LOG_see_position(frame, i, x, y, x1, y1) { if(see_position && frame < limited_frame_end && frame > limited_frame_start) fprintf(stderr, #frame " %d, robot %d, at (%d,%d), to dst (%d,%d)\n", frame, i, x, y, x1, y1);};
+#define see_info 0
+#define LOG_INFO(frame, id, info) { if(see_info && frame < limited_frame_end && frame > limited_frame_start) fprintf(stderr, #frame " %d, " #id " %d, " #info "\n", frame, id);};
+#define see_boat 1
+#define LOG_see_boat(frame, id, taskT, from, to, c_capacity, status, transTime) { if(see_boat && frame < limited_frame_end && frame > limited_frame_start) fprintf(stderr, #frame " %d, boat %d, taskT %d, from %d, to %d, c_capacity %d, status %d, transTime %d\n", frame, id, taskT, from, to, c_capacity, status, transTime);};
+#define see_rmove 0
+#define LOG_see_rmove(frame, id, info) { if(see_rmove && frame < limited_frame_end && frame > limited_frame_start) fprintf(stderr, #frame " %d, " #id " %d, "  "move %s\n", frame, id, info);};
+#define see_robot 0
+#define LOG_see_robot(frame, id, taskT, good_money, target_berth, get_x, get_y, pull_x, pull_y, x, y) { \
+        if(see_robot && frame < limited_frame_end && frame > limited_frame_start) \
+            fprintf(stderr, #frame " %d, " #id " %d, taskT " " %d, goodMoney " " %d, target berth %d, get_xy (%d, %d), pull_xy (%d, %d), c_xy (%d, %d)\n", \
+                        frame, id, taskT, good_money, target_berth, get_x, get_y, pull_x, pull_y, x, y); \
+        };
+#define see_berth 1
+#define LOG_see_berth(frame, id, boat_num, load_num, money) { if(see_berth && frame < limited_frame_end && frame > limited_frame_start) fprintf(stderr, #frame " %d, berth %d, boat_num %d, load_num %d, money %d, to_v dis: %d\n", frame, id, boat_num, load_num, money, berth[id].transport_time);};
+#define see_task 1
+#define LOG_see_task(frame, id, task_num) { if(see_task && frame < limited_frame_end && frame > limited_frame_start) fprintf(stderr, #frame " %d, robot_num: %d, task_num: %d\n", frame, id, task_num);};
 #define see_crash 1
 #define LOG_see_crash(frame, id, info) { if(see_crash && frame < limited_frame_end && frame > limited_frame_start) fprintf(stderr, #frame " %d, " #id " %d, " #info "\n", frame, id);};
-#define see_log if(frame_id < limited_frame_end && frame_id > limited_frame_start)
+
 // #define SEE_MAP
 
 // 定义A*节点
-class Node {
-public:
+struct Node {
     Point point;
     int g; // 起始点到当前点的实际代价
     int h; // 当前点到目标点的估计代价
     int f; // f = g + h
-    Node(){}
-    Node(const Point& point_) : point(point_), g(1), h(0), f(1) {}
-    Node(const Point& point_, int g, int h) : point(point_), g(g), h(h), f(g + h) {}
+    Node(const Point& point) : point(point), g(1), h(0), f(1) {}
+    Node(const Point& point, int g, int h) : point(point), g(g), h(h), f(g + h) {}
 
     // 用于优先队列的比较函数
     bool operator>(const Node& other) const {
         return f > other.f;
     }
-
-    Node& operator=(const Node& b) {
-        point = b.point;
-        g = b.g;
-        h = b.h;
-        f = b.f;
-        return *this;
-    }
 };
-
-class BFS_Node {
-public:
-
-    Point point;
-    int g; // 起始点到当前点的实际代价
-    int h; // 当前点到目标点的估计代价
-    int f; // f = g + h
-    BFS_Node(const Point& point_) : point(point_), g(1), h(0), f(1) {}
-    BFS_Node(const Point& point_, int g, int h) : point(point_), g(g), h(h), f(g + h) {}
-
-    // 用于优先队列的比较函数
-    bool operator>(const BFS_Node& other) const {
-        return g > other.g;
-    }
-
-    BFS_Node& operator=(const BFS_Node& b) {
-        point = b.point;
-        g = b.g;
-        h = b.h;
-        f = b.f;
-        return *this;
-    }
-};
-
 class Task {
 public:
     // at which frame, good disappear
@@ -80,10 +63,11 @@ public:
     // dest_bert_id
     int dest_bert_id;
     int to_dest_berth_dis;
-    Task() : dest_bert_id(0) {}
+    Task(){}
 
     Task(int deadline, int b_x, int b_y, int s_x, int s_y, int money, int berth_i, int dis) :
         deadline(deadline), b_x(b_x), b_y(b_y), s_x(s_x), s_y(s_y), money(money), dest_bert_id(berth_i), to_dest_berth_dis(dis){}
+
 
     const Task& operator=(const Task& other) {
         if (this != &other) {
@@ -113,54 +97,17 @@ public:
     }
 };
 
-// 主要目的是用来存储生成的每个商品到地图上每个地块的距离
-class Good {
-public:
-    int* dis_map;
-    int* dir_map;
-    int x, y;
-    Good() : dis_map(nullptr) {}
-
-    Good(int x_, int y_) : x(x_), y(y_){
-        dis_map = new int[N*N];
-        dir_map = new int[N*N];
-        init();
-    }
-
-    // 返回i j点离x y的距离
-    int getDis(int i, int j) { return *(dis_map + i * N + j);}
-    // 返回i j点到x y的方向
-    int getDir(int i, int j) { return *(dir_map + i * N + j);}
-
-    void free_m() {
-        if(dis_map != nullptr) {
-            delete[] dis_map;
-            dis_map = nullptr;
-        }
-        if(dir_map != nullptr) {
-            delete[] dir_map;
-            dir_map = nullptr;
-        }
-    }
-
-private:
-    void init();
-};
-
 // A* algorithm, find a path from (sx, sy) to (dx, dy) in map
 vector<Point> aStar(char grid[][N], int connectField[][N], vector<Robot>& robot, int sx, int sy, int dx, int dy, int frame, int r_id);
 
 // bfs algorithm, find a path from (sx, sy) to (dx, dy) in map
 vector<Point> bfs_path(char grid[][N], int connectField[][N], vector<Robot>& robot, int sx, int sy, int dx, int dy, int frame, int r_id);
 
-// bfs algorithm, find a path from (sx, sy) to (dx, dy) in map
-vector<Point> boat_bfs_path(char grid[][N], int connectField[][N], vector<Boat>& boat, int sx, int sy, int dx, int dy, int frame, int r_id);
-
 // collect at which frame grid will have robot
 void setFrameObMap(vector<Robot>& robot, int frame, int r_id);
 
 // an other get path way, start is a berth, end is a point
-vector<Point> getPathFromBerthDirMap(int berth_dir_map[][N][N], int mbx, int mby, int berth_x, int berth_y, int berth_id, bool rev);
+vector<Point> getPathFromBerthDirMap(int berth_dir_map[berth_num][N][N], int mbx, int mby, int berth_x, int berth_y, int berth_id);
 
 // generate a random Point between [1, n]
 Point randomPoint(int n, char grid[][N]);
@@ -169,11 +116,13 @@ Point randomPoint(int n, char grid[][N]);
 int getDirection(int x, int y);
 
 // find position in path, to avoid timeout
-size_t findPosition(vector<Point>& path, int x, int y);
+int findPosition(vector<Point>& path, int x, int y);
+
+// expand obstacle to left and down
+void obstacle_expand(char grid[][N]);
 
 // lian tong field split
 void connectFieldSplit(char grid[][N], int connectField[][N]);
-void ocean_connectFieldSplit(char grid[][N], int ocean_connectField[][N]);
 
 // get millisecond
 long long getMs();
@@ -188,44 +137,28 @@ double eulerDistance(int x, int y, int x1, int y1);
 int manhattanDistance(const Point& a, const Point& b);
 int manhattanDistance(int x, int y, int x1, int y1);
 
-// 初始化陆地中的点到港口的距离和方向
-void initBerthDirAndDisMap(int berth_dir_map[][N][N], int berth_dis_map[][N][N], char grid[][N], vector<Berth>& berth);
+// gather road direction about all point in map to a specific berth
+void initBerthDirAndDisMap(int berth_dir_map[berth_num][N][N], int berth_dis_map[berth_num][N][N], char grid[][N], vector<Berth>& berth);
 
-// 初始化海洋中的点到T点的距离
-void initOceanTDisMap(int ocean_T_dis_map[][N][N], char grid[][N], vector<Point>& T);
+// count nearby ocean gird num of a grid
+// if return >= 2, means it is in ocean side
+int countOceanGrid(int x, int y, char grid[][N]);
 
-// 初始化海洋中的点到港口的距离
-void initOceanBerthDisMap(int ocean_berth_dis_map[][N][N], char grid[][N], vector<Berth>& berth);
-
-// 初始化地图行走代价 主要目的是将主航道周围代价增加
-void initGridCost(char grid[][N], int grid_cost[][N][N]);
+// count nearby obstacle num
+int countObstacleGrid(int x, int y, char grid[N][N]);
 
 // count nearby robot num
 int countNearRobotNum(int x, int y, char grid[N][N], vector<Robot>& robot);
 
+// judge a robot around if exist path so other robot can pass it
+bool judgeRobotAroundIfPass(int x, int y, char grid[N][N]);
+
+// fill given aren to ocean
+void fillOcean(char grid[][N], int x1, int y1, int x2, int y2);
+
 // chekc if 2 robots will happen collision
 bool checkCollisionBetwRobot(vector<Robot>& robot, int r1_id, int r2_id);
 
-// check if 2 boats will happen collision
-bool checkCollisionBetwBoat(vector<Boat>& boat, int b1_id, int b2_id);
-
-// init priority task to robot assign relationship
-void init_taskBindQue(priority_queue<RobotTaskProfit, vector<RobotTaskProfit>, greater<RobotTaskProfit>>& taskBindQue, \
-                    int taskIds_map[N][N], char grid[N][N], vector<Robot>& robot, vector<Task>& taskQueue, int frame);
-
-// 针对船往不同方向走 做一下地图填充
-void intiBoatDirCanGoMap(char grid[N][N], bool boat_dir_can_go_map[4][N][N]);
-
-// 返回平均每帧场上新增货物的速度
-double getAvgNewGoodsSpeed();
-
-// 返回平均每帧所有机器人搬运货物到港口的速度
-double getAvgRobotsPullSpeed();
-
-// 返回平均每帧所有船去卖货的速度
-double getAvgBoatToSellSpeed();
-
-inline void banBerth(int frame, int berth_id){
-    if(frame_id == frame) berth[berth_id].forbid = true;
-}
+// 初始化非pull状态机器人到所有可达点的距离
+void init_robots2eachGDis(int robot_dis_map[robot_num][N][N], char grid[N][N], vector<Robot>& robot);
 #endif

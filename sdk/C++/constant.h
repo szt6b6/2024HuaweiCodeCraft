@@ -8,39 +8,51 @@
 
 using namespace std;
 /** 环境属性*/
+const int n = 200;
+const int robot_num = 10;
+const int berth_num = 10;
+const int N = 202;
+const int flow_num = 10 * N + 10 + 2; // 最大流最多节点数量 机器人数+任务数 <= flow_num - 2
+// const int flow_num = N*N*berth_num;
+const int boat_num = 5;
+const int berth2berth_dis = 500;
 
-const int N = 200;
-const int boat_price=8000, robot_price=2000;
-const int max_berth_num = 10;
-const int max_robot_num = 20;
-const int max_boat_num = 5;
-const int max_T_num = 5;
+constexpr float float_max = numeric_limits<float>::max();
 
-const int flow_num = N*3+max_robot_num+2;
 
-extern int real_max_robot_num;
-extern int real_max_boat_num;
-extern int robot_num;
-extern int boat_num;
-extern int berth_num;
-
-extern int goods_num;
-extern int total_added_goods_num;
-extern int total_del_goods_num;
-extern int frame_id;
-extern int money;
-
-extern int total_pull_num;
+extern int total_load_num;
 extern int total_pull_money;
 
-extern int map_flag;
+/**----------参数区域---------------------*/
+/**all express as profit, look for greater profit*/
+// good bind to which berth
+extern float berth_dismap_weight;
+extern float berth_loading_weight;
+extern float berth_averageDis_weight;
+extern float berth_haveBoatNum_weight;
+extern float berth_haveRnum_weight;
+
+// robot pick which task
+extern float robot_moneyDis_weight;
+extern float robot_avgDis_weight;
+extern float robot_haveRnum_weight;
+extern float robot_haveBoat_weight;
+
+// boat go to which berth
+extern float boat_loadNumAndTime_weight;
+extern float boat_robotNum_weight ;
+extern float boat_avgDis_weight;
+
+// utils.cpp 
+extern float gap_frame_weight;
+/** ------------------------------------- */
 
 // 定义2D坐标点
 class Point {
 public:
     int x, y;
 
-    Point(int x_, int y_) : x(x_), y(y_) {}
+    Point(int x, int y) : x(x), y(y) {}
     Point() : x(0), y(0) {}
 
     bool operator==(const Point& b) {
@@ -52,21 +64,11 @@ public:
         y = b.y;
         return *this;
     }
-
 };
 
 // 定义移动方向
 const vector<Point> directions = {{0, 1}, {0, -1}, {-1, 0}, {1, 0}}; // 0right 1left 2up 3down, next_p - current_p = direction
 const char directions_s[4][10] = {"right", "left", "up", "down"};
-
-// 1 为陆地属性 2为海洋属性 3为二者皆可 0 为障碍物
-extern unordered_map<char, int> grid_property;
-
-// 地块障碍物通过时间
-extern unordered_map<char, int> grid_time_property;
-
-// 地块碰撞属性
-extern unordered_map<char, int> collision_property;
 
 // define robot task type
 enum RobotTaskType {
@@ -82,13 +84,29 @@ enum BoatTaskType {
     TO_LOAD = 2,
 };
 
-// define boat task type
-enum BoatAction {
-    STAY = 0,
-    SHIP = 1,
-    ROT_0 = 2,
-    ROT_1 = 3,
-    RANDOM_ROT = 4,
-};
+/* map data
+    . : empty land
+    * : ocean
+    # : obstacle
+    A : robot start point
+    B : berth position 4x4
 
+    机器人占4个格子 似乎左下角是其坐标格 需要对地图做扩充处理 障碍物都往左下分别扩充一格
+
+    - each frame search path using A* will get timeout
+
+    - robot can GET/PULL and go at one frame
+*/
+
+/*
+    path conflict
+    robot {
+        robot avoid state: 0/normal 1/avoid // avoid state 
+        robot task type: 0/none 1/GET 2/PULL // task type
+    }
+
+    sz
+
+
+*/
 #endif
